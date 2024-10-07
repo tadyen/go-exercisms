@@ -9,7 +9,7 @@ func Distance(a, b string) (int, error) {
 		return -1, errors.New("asdf")
 	}
 	h_dist := 0
-	for i, _ := range a {
+	for i := range a {
 		if a[i] != b[i] {
 			h_dist++
 		}
