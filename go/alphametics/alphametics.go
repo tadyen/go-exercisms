@@ -47,11 +47,14 @@ func Solve(puzzle string) (result map[string]int, e error) {
 		}
 	}
 
-	// sanity check: more symbols than possible digits
+	// sanity check: more symbols than possible digits (symbols must represent digits uniquely)
 	if len(digits) > base {
 		e = fmt.Errorf("invalid number of symbols. Found %d symbols when expected %d only", len(digits), base)
 		return
 	}
+
+	// TODO
+	// Initial symbols cannot have 0 value
 
 	// left-pad words to maxWordLen
 	var pad rune = '-'
