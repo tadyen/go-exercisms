@@ -17,12 +17,20 @@ Least coins tricky cases:
         naive: [10, 10, 3, 2] (greedy algorithm)
         actual: [10, 8, 7]
     }
-    (2){ target, coins := 22, [2,4,6,8]
-    
+    (2){ target, coins := 24, [10,8,2]
+        incremental search: [10,10,2,2] or [10,8,2,2,2]
+        actual: [8,8,8]
     }
 
 */
 
+func AnyChange(coins []int, target int) ([]int, error){
+    // assume coins is sorted largest to smallest, inputs already sanitised for negatives
+    // TODO implement sanitisation
+    
+}
+
+// This is the function to be submitted
 func Change(coins []int, target int) ([]int, error) {
     fmt.Println("asdf")
     var coinbination = make( map[int]int )    // coin[value]amount
@@ -73,4 +81,6 @@ func Change(coins []int, target int) ([]int, error) {
     */
     return result, nil
 }
+
+
 
