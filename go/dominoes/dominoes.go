@@ -37,13 +37,57 @@ func NewChain() *Chain{
 }
 
 // Func to be submitted
-func MakeChain(input []Domino) ([]Domino, bool) {
+func MakeChain(input []Domino) (result []Domino, ok bool) {
+    fmt.Printf("\nMakeChain\n")
+    // trivial, the puzzlemaster wants empty input to result with true
+    if len(input) == 0 { return nil, true }
+
+    chains := make([]Chain, 0)
+    
+    remainder := &input
+    for {
+        res, rem, ok := OneChain(*remainder)
+        if res.looped {
+            chains = append(chains, res)
+        }
+        if ok {
+            break
+        }
+        if len(rem) <= 1 || len(res.chain) == 0{
+            // no solution, otherwise remainder wouldve already been fit into the chain
+            result, ok := res.chain, false
+            fmt.Printf("MakeChain summary: ok: %v\t result: %v\n", ok, result)
+            return result,ok
+        }
+        remainder = &rem
+    }
+    fmt.Println(chains)
+    switch len(chains){
+    case 0:
+        panic("Somehow no chains found when expected at least 1")
+    case 1:
+        result, ok = chains[0].chain, true
+    default:
+        ok = true
+        for i:=1; i<len(chains) && ok; i++{
+            _, ok2 := chains[0].InsertLoopLoop(&chains[i])
+            ok = ok && ok2
+        }
+        result = chains[0].chain      
+    }
+    fmt.Printf("MakeChain summary: ok: %v\t result: %v\n", ok, result)
+    return result, ok
+}
+
+// Elementary solution
+// make a chain using 1 domino at a time. May leave residue that can be further chained up
+// ok is true if all inputs are used up AND result is a looped chain, else false
+func OneChain(input []Domino) (result Chain, remainder []Domino, ok bool) {
     // any valid chain is ok
     // dominoes can be rotated, but cannot be reused. However duplicates may exist
-    fmt.Printf("MakeChain called: Input: %v\n", input)
+    fmt.Printf("OneChain called: Input: %v\n", input)
     
-    // trivial, the puzzlemaster wants it to be true
-    if len(input) == 0 { return input, true }
+    if len(input) == 0 { return result, nil, false }    // set to false because it's not really a chain
     
     c := *NewChain()
     dominoes := make([]Domino, len(input))
@@ -59,17 +103,15 @@ func MakeChain(input []Domino) ([]Domino, bool) {
             noSolution = true
         }
     }
+    
+    ok = true
     if len(dominoes) > 0 || (!c.looped) {
-        fmt.Printf("No solution\n")
-        fmt.Printf("Chain: %v\n", c.chain)
-        fmt.Printf("Remainder: %v\n\n", dominoes)
-        return c.chain, false
+        ok = false
     }
-
-    fmt.Printf("Found solution\n")
-    fmt.Printf("Chain: %v\n", c.chain)
-    fmt.Printf("Remainder: %v\n\n", dominoes)
-    return c.chain, true 
+    result = c
+    remainder = dominoes
+    fmt.Printf("ok: %v\nresult: %v\nrem: %v\n", ok, result.chain, remainder)
+    return result, remainder, ok
 }
 
 func (d Domino) Rotate() Domino {
@@ -80,54 +122,79 @@ func (d Domino) Rotate() Domino {
 
 
 // insert domino into chain ensuring chain isnt broken
-func (c *Chain) InsertStringed(d Domino) bool {
+func (c *Chain) InsertStringed(d Domino) (where int, ok bool) {
     if ! c.stringed{
-        return false
+        return 0, false
     }
-    _insertSafe := func() bool {
+    _insertSafe := func() (w int, o bool) {
         for i:=0; i<=len(c.chain); i++{
             c.chain = slices.Insert(c.chain, i, d)
             if c.Stringed(){
-                return true
+                return i, true
             }
             c.chain = slices.Delete(c.chain, i, i+1)
         }
-        return false
+        return 0, false
     }
 
-    if _insertSafe(){
-        return true
+    if w, o := _insertSafe(); o{
+        return w, true
     }
     d = d.Rotate()
-    if _insertSafe(){
-        return true
+    if w, o := _insertSafe(); o{
+        return w, true
     }
-    return false
+    return 0, false
 }
 
 // insert domino into chain ensuring loop isnt broken
-func (c *Chain) InsertLooped(d Domino) bool{
+func (c *Chain) InsertLooped(d Domino) (where int, ok bool){
     if ! c.looped {
-        return false
+        return 0, false
     }
     oldChain := make([]Domino, len(c.chain))
     copy(oldChain, c.chain)
-    _insertSafe := func() bool{
-        if c.InsertStringed(d) && c.Looped(0){
-            return true
+    _insertSafe := func() (w int, o bool){
+        if w, o := c.InsertStringed(d); o && c.Looped(0){
+            return w, true
         }
         c.chain = oldChain
-        return false
+        return 0, false
     }
 
-    if _insertSafe(){
-        return true
+    if w, o := _insertSafe(); o{
+        return w, true
     }
     d = d.Rotate()
-    if _insertSafe(){
-        return true
+    if w,o := _insertSafe(); o{
+        return w, true
     }
-    return false
+    return 0, false
+}
+
+// insert a looped chain into another looped chain
+func (to *Chain) InsertLoopLoop(from *Chain) (where int, ok bool){
+    if ! (to.looped && from.looped) {
+        return 0, false
+    }
+    
+    // we need to break the loop and select a value that would fit inside. 
+    // This means we have a domino with same values on each side
+    // eg. [1|2], [2|3], [3|1] is a chain given by: [1..1], [2...2], or [3...3]
+    // due to symmetry, testing just one side of each domino is also testing every side already
+    // Additionally, since breaking a loop results in a super 1-value domino, we only need compare the values
+    // we do not need to test if the domino fits inside or not, ie no domino rotation required
+    for i, dom := range from.chain{
+        for j, dom2 := range to.chain{
+            if dom[0] == dom2[0] {
+                end := len(from.chain)
+                stringed := slices.Concat(from.chain[i:end], from.chain[0:i])
+                to.chain = slices.Insert(to.chain, j, stringed...) 
+                return j, true
+            }
+        }
+    }
+    return 0, false
 }
 
 // insert domino into chain, prioritising making a loop
@@ -136,18 +203,20 @@ func (c *Chain) Insert(d Domino) bool{
     case 0:
         c.chain = append(c.chain, d)
     case 1:
-        if ! c.InsertStringed(d){
+        if _,ok := c.InsertStringed(d); !ok {
             return false  
         }
     default:
         switch {
         case c.looped:
-            if ! c.InsertLooped(d){
+            if _,ok := c.InsertLooped(d); !ok {
                 return false
             }
         case c.stringed:
-            if ! (c.InsertLooped(d) || c.InsertStringed(d)){
-                return false
+            if _,ok := c.InsertLooped(d); !ok {
+                if _,ok := c.InsertStringed(d); !ok {
+                    return false
+                }
             }
         default:
             panic("chain is fkd. Unexpected behaviour")
