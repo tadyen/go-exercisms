@@ -18,7 +18,6 @@ package dominoes
 
 import (
     "slices"
-    "fmt"
 )
 
 type Domino [2]int
@@ -38,7 +37,7 @@ func NewChain() *Chain{
 
 // Func to be submitted
 func MakeChain(input []Domino) (result []Domino, ok bool) {
-    fmt.Printf("\nMakeChain\n")
+
     // trivial, the puzzlemaster wants empty input to result with true
     if len(input) == 0 { return nil, true }
 
@@ -56,12 +55,12 @@ func MakeChain(input []Domino) (result []Domino, ok bool) {
         if len(rem) <= 1 || len(res.chain) == 0{
             // no solution, otherwise remainder wouldve already been fit into the chain
             result, ok := res.chain, false
-            fmt.Printf("MakeChain summary: ok: %v\t result: %v\n", ok, result)
+
             return result,ok
         }
         remainder = &rem
     }
-    fmt.Println(chains)
+
     switch len(chains){
     case 0:
         panic("Somehow no chains found when expected at least 1")
@@ -75,7 +74,7 @@ func MakeChain(input []Domino) (result []Domino, ok bool) {
         }
         result = chains[0].chain      
     }
-    fmt.Printf("MakeChain summary: ok: %v\t result: %v\n", ok, result)
+
     return result, ok
 }
 
@@ -85,7 +84,7 @@ func MakeChain(input []Domino) (result []Domino, ok bool) {
 func OneChain(input []Domino) (result Chain, remainder []Domino, ok bool) {
     // any valid chain is ok
     // dominoes can be rotated, but cannot be reused. However duplicates may exist
-    fmt.Printf("OneChain called: Input: %v\n", input)
+
     
     if len(input) == 0 { return result, nil, false }    // set to false because it's not really a chain
     
@@ -110,7 +109,7 @@ func OneChain(input []Domino) (result Chain, remainder []Domino, ok bool) {
     }
     result = c
     remainder = dominoes
-    fmt.Printf("ok: %v\nresult: %v\nrem: %v\n", ok, result.chain, remainder)
+
     return result, remainder, ok
 }
 
