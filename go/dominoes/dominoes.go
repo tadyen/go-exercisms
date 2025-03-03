@@ -6,56 +6,80 @@ type Domino [2]int
 type Chain []Domino
 
 // version 2 solution, complete redo
+// I thought of making it a compact recursive solution initially, but I am keeping it closer to my first iteration instead
+//  where it is much more verbose and logically split out, with more robustness.
+// I favour my ability to read and understand what is happening, over some black magic recursion
+
+/*
+    0.  A loop is a superset of a chain. We actually want to make loops.
+    1.  A loop may be broken down into sub-loops.
+	2.  A set of dominoes that forms a loop, will *always* form a loop, or set of sub-loops when chained.
+	3.  This means that if a loop-forming set is filtered into a loop, and a remainder, the remainder MUST be a loop, or set of sub-loops.
+	    If at any point in recursion a remainder excludes being a loop, then the parent set also cannot form a loop.
+	4.  This means the break-condition is when a set is split into a result & remainder, the result is nil, but there is a non-nil remainder.
+*/
+
+// fn to be submitted
 func MakeChain(input Chain) (Chain, bool) {
-    _MakeChain := func () (result, remainder Chain, ok bool){
-        if len(dominoes) == 0 { return nil, nil, true }
-        if dominoes.Looped(){ return dominoes, nil, true }
-        return dominoes, nil, false
+    if len(input) == 0 { return nil, true }
+    if input.Looped() { return input, true }
+    res, rem := MergeChains(Chain{}, input)
+
+    if len(rem) == 0 {
+        return res, res.Looped()    // exhausted set
+    }
+    if len(res) == 0 && len(rem) != 0 {
+        return nil, false           // break condition
     }
 
-    panic("")
+    remChain, ok := MakeChain(rem)
+    if !ok {
+        return nil, false
+    }
+    res, rem = MergeChains(res, remChain)
+    
+    return res, res.Looped() && len(rem) == 0
 }
 
-func MergeChains(to,from Chain) (result, remainder Chain, ok bool){
-    _MergeChain := func (a,b *Chain) (complete bool){
+// merge dominoes from 'b' into 'a'. 
+// 'a' must result in a chain or loop, and 'b' are the remainder dominoes. 
+// It may move dominoes out from 'a' into 'b' to satisfy the above.
+func MergeChains(to,from Chain) (result, remainder Chain){
+    newTo := append(Chain{}, to...)
+    newFrom := append(Chain{}, from...)
+    
+    _MergeChain := func (a,b *Chain) (){
         switch{
-        case len(*a) + len(*b) == 1:
+        case !a.Chained():  // cannot insert into non-chain
+            *a, *b = nil, append(*a,*b...)
+        case len(*a) + len(*b) == 1:    // only 1 domino
             *a, *b = append(*a,*b...), nil
-            return true
-        case len(*a) + len(*b) == 0:
-            return true
-        case len(*b) == 0:
-            if a.Chained(){
-                return true
-            }
-            *a,*b = *b, nil
-            return false
+        case len(*b) == 0:              // no inputs to merge
+            break;
         case a.Looped() && b.Looped():
             if res, ok := MergeLoops(*a, *b); ok{
                 *a, *b = res, nil
-                return true
+                break;
             }
-        case a.Chained():
-            for i,dom := range *b{
-                if res, ok := Insert(*a,dom); ok{
-                    *a, *b = res, slices.Delete(*b,i,i+1)
-                    return true
+        case a.Chained():   // insert dominos from 'b' into 'a'
+            Pick:
+            for idx, dom := range *b{
+                res, ok := Insert(*a, dom)
+                if ok{
+                    *a = res
+                    *b = slices.Delete(*b, idx, idx+1)
+                    goto Pick
                 }
             }
-        case !a.Chained():
-            *a, *b = nil, append(*a,*b...)
-            return true
-        default:
-            return false
         }
-        return false
+        return
     }
+    _MergeChain(&newTo, &newFrom)
+    return newTo, newFrom
 }
 
-func (d Chain) Looped() bool{
-    return d.Chained() && ( d[0][0] == d[len(d)][1] )
-}
 
+// test Chain if it's chained from start to end of slice.
 func (d Chain) Chained() bool{
     if len(d) <= 1 { return true }
     chained := true
@@ -65,28 +89,40 @@ func (d Chain) Chained() bool{
     return chained   
 }
 
-func Insert(c Chain, dom Domino) (Chain, bool){
-    _insert := func(c Chain, i int, d Domino)(out Chain, looped, chained bool) {
-        res := slices.Insert(c,i,d)
-        return res, res.Looped(), res.Chained()
+// Test chain if it's looped, ie a chain that chains on its own ends too.
+func (d Chain) Looped() bool{
+    if len(d) == 0 {
+        return false
     }
-    for i := range d{
-        if chain, looped, _ := _insert(d,i,dom); looped{
-            return chain, true
-        }
-        if chain, looped, _ := _insert(d,i,dom.Rotate()); looped{
-            return chain, true
-        }
-        if chain, _, chained := _insert(d,i,dom); chained{
-            return chain, false
-        }
-        if chain, _, chained := _insert(d,i,dom.Rotate()); chained{
-            return chain, false
-        }
-    }
-    return d, false
+    return d.Chained() && ( d[0][0] == d[len(d)-1][1] )
 }
 
+// Insert domino into a chain, prioritising making a loop instead of a chain
+func Insert(c Chain, dom Domino) (result Chain, ok bool){
+    if len(c) == 0{
+        return Chain{dom}, true
+    }
+    _Insert := func(c Chain, i int, d Domino) Chain {
+        return append(Chain{}, slices.Insert(c,i,d)...)
+    }
+    for i := range c{
+        if result := _Insert(c,i,dom); result.Looped(){
+            return result, true
+        }
+        if result := _Insert(c,i,dom.Rotate()); result.Looped(){
+            return result, true
+        }
+        if result := _Insert(c,i,dom); result.Chained(){
+            return result, true
+        }
+        if result := _Insert(c,i,dom.Rotate()); result.Chained(){
+            return result, true
+        }
+    }
+    return c, false
+}
+
+// Merge loops together, do not need to compare domino sides. Loops are a super domino-chain with both ends sharing same value.
 func MergeLoops(dst,src Chain) (Chain, bool) {
     if !(dst.Looped() && src.Looped()){ return nil, false }
     result := make(Chain, 0, len(dst)+len(src))
@@ -94,7 +130,7 @@ func MergeLoops(dst,src Chain) (Chain, bool) {
     for i:=0; i<len(src); i++{
         for j:=0; j<len(dst); j++{
             if src[i][0] == dst[j][0]{
-                result = slices.Insert(result, i, slices.Concat(dst[j:len(dst)], dst[0:j])... )
+                result = slices.Insert(result, i, slices.Concat(dst[j:], dst[0:j])... )
                 return result, true
             }
         }
